@@ -1,5 +1,7 @@
 from datetime import date, datetime
 
 
-def yyyy_mm_dd(date_str: str) -> date:
+def parse_date(date_str: str) -> date:
+    """Parse a date string in the format YYYY-MM-DD to a date object."""
+
     return datetime.strptime(date_str, "%Y-%m-%d")
