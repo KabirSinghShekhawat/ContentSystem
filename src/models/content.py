@@ -1,9 +1,18 @@
 from datetime import date
 from typing import Optional
 
-from sqlmodel import Field
+from sqlmodel import Field, Relationship, SQLModel
 
 from src.models.timestamp_mixin import TimestampMixin
+
+
+class ContentLanguage(SQLModel, table=True):
+    content_id: Optional[int] = Field(
+        default=None, foreign_key="content.id", primary_key=True
+    )
+    language_id: Optional[int] = Field(
+        default=None, foreign_key="language.id", primary_key=True
+    )
 
 
 class Content(TimestampMixin, table=True):
@@ -25,3 +34,15 @@ class Content(TimestampMixin, table=True):
     production_company_id: int
     genre_id: int
     is_deleted: bool = False
+
+    languages: list["Language"] = Relationship(
+        back_populates="content", link_model=ContentLanguage
+    )
+
+
+class Language(TimestampMixin, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    content: list["Content"] = Relationship(
+        back_populates="languages", link_model=ContentLanguage
+    )
