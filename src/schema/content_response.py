@@ -1,11 +1,10 @@
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ContentResponse(BaseModel):
-    id: int
     budget: float
     revenue: float
     runtime: int
@@ -20,5 +19,5 @@ class ContentResponse(BaseModel):
     vote_count: Optional[int] = 0
     production_company_id: int
     genre_id: int
-    created_at: datetime
-    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -17,9 +17,14 @@ class SortDirection(str, Enum):
     DESC = "desc"
 
 
+class PaginationParams(BaseModel):
+    page: int = Field(1, ge=1, description="Page number")
+    page_size: int = Field(20, ge=1, le=100, description="Items per page")
+
+
 class PaginationResponse(BaseModel):
     current_page: int
-    per_page: int
+    page_size: int
     total_items: int
     total_pages: int
 

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from fastapi import UploadFile, HTTPException
 
 
 def parse_date(date_str: str) -> date:
@@ -24,3 +25,17 @@ def parse_languages(language_list_str: str):
         if lang not in ("", "No Language") and "?" not in lang
     ]
     return languages
+
+
+def validate_csv_file(file: UploadFile) -> bool:
+    """Validate the file type and raise an exception if it is not a CSV file."""
+
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Invalid file type",
+                "message": "Only CSV files are allowed",
+            },
+        )
+    return True
