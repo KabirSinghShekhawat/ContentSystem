@@ -122,11 +122,12 @@ class ContentService:
                     query = query.order_by(getattr(Content, sort_field).asc())
                 else:
                     query = query.order_by(getattr(Content, sort_field).desc())
-                    # Count total items
+        
+        # total items can be calculated without a db query but might affect page drift.
         count_query = select(func.count()).select_from(query.subquery())
         total = await self.session.scalar(count_query)
 
-        # Apply pagination to query
+        # Offset pagination is 1-indexed.
         items_query = query.offset((pagination.page - 1) * pagination.page_size).limit(
             pagination.page_size
         )
@@ -134,8 +135,9 @@ class ContentService:
         items = items.scalars().all()
         items = [ContentResponse.model_validate(item) for item in items]
 
-        # Calculate total pages
+        # Last page can have less items.
         pages: int = math.ceil(total / pagination.page_size)
+
         return ContentListResponse(
             data=items,
             pagination=PaginationResponse(
