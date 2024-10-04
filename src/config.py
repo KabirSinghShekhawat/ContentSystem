@@ -7,8 +7,10 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:@localhost/content_system")
-    ECHO_SQL: bool = True
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", "postgresql+asyncpg://postgres:@localhost/content_system"
+    )
+    ECHO_SQL: bool = False
 
 
 settings = Settings()

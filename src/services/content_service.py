@@ -2,10 +2,17 @@ from io import StringIO
 from typing import List, Tuple
 
 import pandas as pd
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import and_, text
 from sqlalchemy.future import select
 
-from src.models.content import Content, Language
+from src.models.content import Content, ContentLanguage, Language
+from src.schema.query_params import (
+    ContentFilterParams,
+    ContentSortParams,
+    SortDirection,
+)
 from src.utils import parse_date, parse_languages
 
 
@@ -59,39 +66,77 @@ class ContentService:
         )
         return result.scalars().all()
 
+    async def get_all_languages(self):
+        result = await self.session.execute(select(Language))
+        return result.scalars().all()
+
     async def get_content(
         self,
-        languages: List[str] = None,
-        year: int | Tuple[int] = None,
-        sort_params: List[Tuple[str, str]] = None,
+        filter_params: ContentFilterParams = None,
+        sort_params: List[ContentSortParams] = [],
     ):
+        filter_params = filter_params.to_dict()
+        languages: List[str] = filter_params.get("languages", None)
+        year: int | Tuple[int] = filter_params.get("year", None) or filter_params.get(
+            "year_range", None
+        )
+
         query = select(Content)
         if languages and len(languages) > 0:
-            query = query.join(Content.languages).filter(Language.name.in_(languages))
+            languages = [f"'{lang.strip().lower()}'" for lang in languages]
+            sql_query = f"""
+            WITH lang as (SELECT id FROM language where lower(name) in ({','.join(languages)})),
+            cl as (select content_id from contentlanguage cl join lang l on cl.language_id = l.id)
+            select distinct c.id as content_id from content c join cl on c.id = cl.content_id
+            """
+            lang_filtered = await self.session.execute(text(sql_query))
+            lang_filtered = lang_filtered.all()
+            content_ids = [c.content_id for c in lang_filtered]
+            query = query.where(Content.id.in_(content_ids))
+
         if year:
             if isinstance(year, tuple):
                 start_year, end_year = year
-                query = query.filter(Content.release_date.between(start_year, end_year))
+                conditions = []
+                conditions.append(
+                    func.date_part("year", Content.publication_date) <= end_year
+                )
+                conditions.append(
+                    func.date_part("year", Content.publication_date) >= start_year
+                )
+                query = query.where(and_(*conditions))
             else:
-                query = query.filter(Content.release_date == year)
-
-        for sort_field, sort_direction in sort_params:
+                query = query.where(
+                    func.date_part("year", Content.release_date) == year
+                )
+        # vote_average field in db is exposed as rating in the API.
+        sort_key_map = {
+            "rating": "vote_average",
+        }
+        for sort_param in sort_params:
+            sort_field = sort_param.field
+            sort_direction = sort_param.direction
             if sort_field:
-                if sort_direction == "asc":
-                    query = query.order_by(sort_field)
+                sort_field = sort_key_map.get(sort_field.value, sort_field.value)
+                if sort_direction == SortDirection.ASC:
+                    query = query.order_by(getattr(Content, sort_field).asc())
                 else:
-                    query = query.order_by(sort_field.desc())
+                    query = query.order_by(getattr(Content, sort_field).desc())
         result = await self.session.execute(query)
-        return result.scalars().all()
+        result = result.scalars()
+        return result.all()
 
     async def create_content(self, csv_buffer: StringIO):
         df = pd.read_csv(csv_buffer)
         df = self.clean_data(df)
 
         await self.update_languages(df["languages"])
+        all_languages = await self.get_all_languages()
+        lang_map: dict[str, int] = {lang.name: lang.id for lang in all_languages}
 
         records = df.to_dict(orient="records")
         content_records = []
+        content_languages = []
         for record in records:
             content = Content(
                 budget=record["budget"],
@@ -108,13 +153,16 @@ class ContentService:
                 vote_count=record["vote_count"],
                 production_company_id=record["production_company_id"],
                 genre_id=record["genre_id"],
-                languages=[
-                    Language(name=lang) for lang in parse_languages(record["languages"])
-                ],
+                languages=record["languages"],
             )
             content_records.append(content)
 
         self.session.add_all(content_records)
         await self.session.commit()
-        q = select(Content)
-        await self.session.execute(q)
+        for content in content_records:
+            for lang in parse_languages(content.languages):
+                content_languages.append(
+                    ContentLanguage(content_id=content.id, language_id=lang_map[lang])
+                )
+        self.session.add_all(content_languages)
+        await self.session.commit()

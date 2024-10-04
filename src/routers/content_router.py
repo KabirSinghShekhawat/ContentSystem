@@ -24,12 +24,12 @@ router = APIRouter()
     status_code=201,
 )
 async def upload_csv(
-    file: UploadFile = File(...), session: AsyncSession = Depends(get_db_session),
-    status_code=201,
+    file: UploadFile = File(...), session: AsyncSession = Depends(get_db_session)
 ):
     contents = await file.read()
     csv_buffer = io.StringIO(contents.decode("utf-8"))
     await ContentService(session).create_content(csv_buffer)
+    return JSONResponse({"message": "File uploaded successfully"}, status_code=201)
 
 
 @router.get("/content", response_model=ContentListResponse)
@@ -60,16 +60,16 @@ async def list_content(
             sort_params.append(sort_param)
 
     response = await ContentService(session).get_content(
-        filters=filters.to_dict(),
+        filter_params=filters,
         sort_params=sort_params,
     )
+
     return JSONResponse(
         content={
-            "data": {
-                "filters": filters,
-                "sort_params": sort_params,
-                "contents": response,
-            }
+            "data": [
+                r.model_dump(exclude={"created_at", "updated_at", "is_deleted", "id"})
+                for r in response
+            ],
         },
         status_code=200,
     )

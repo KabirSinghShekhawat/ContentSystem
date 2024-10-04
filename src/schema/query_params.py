@@ -1,10 +1,10 @@
+import urllib.parse
 from enum import Enum
 from typing import List, Optional
-import urllib.parse
+
 from pydantic import BaseModel, Field
 
 from src.schema.content_response import ContentResponse
-from src.utils import LanguageHandler
 
 
 class SortField(str, Enum):
@@ -45,11 +45,8 @@ class ContentFilterParams(BaseModel):
                 filters["year"] = int(self.year)
 
         if self.language:
-            languages = [
-                urllib.parse.unquote(lang.strip()) for lang in self.language.split(",")
-            ]
             filters["languages"] = [
-                LanguageHandler.normalize_language(lang) for lang in languages
+                urllib.parse.unquote(lang.strip()) for lang in self.language.split(",")
             ]
 
         return filters
